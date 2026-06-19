@@ -86,6 +86,12 @@ private:
   void registerSensors(
     const hardware_interface::HardwareInfo & hardware_info);
 
+  // Register GPIOs (for now, only mimics command to state)
+  // \param[in] hardware_info hardware information where the data of
+  // the GPIOs is extracted.
+  void registerGPIOs(
+    const hardware_interface::HardwareInfo & hardware_info);
+
   /// \brief Private data class
   std::unique_ptr<GazeboSimSystemPrivate> dataPtr;
 };
