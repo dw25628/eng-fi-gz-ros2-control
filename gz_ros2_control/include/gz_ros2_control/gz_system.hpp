@@ -94,6 +94,11 @@ private:
 
   /// \brief Private data class
   std::unique_ptr<GazeboSimSystemPrivate> dataPtr;
+
+  /// \brief Map from state name to hardware_interface component info
+  std::unordered_map<std::string, size_t> state_index_map_;
+  /// \brief Map from command name to hardware_interface component info
+  std::unordered_map<std::string, size_t> command_index_map_;
 };
 
 }  // namespace gz_ros2_control

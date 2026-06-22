@@ -98,10 +98,8 @@ struct jointData
 
 struct GPIOData
 {
-  std::string name;
-  std::vector<std::string> state_interface_names;
-  std::vector<double> states;
-  std::vector<double> mock_commands;
+  std::vector<std::pair<std::string, double>> state_interfaces;
+  std::vector<std::pair<std::string, double>> command_interfaces;
 };
 
 class ForceTorqueData
@@ -180,7 +178,7 @@ public:
   std::vector<struct jointData> joints_;
 
   /// \brief vector with the GPIOs.
-  std::vector<struct GPIOData> gpios_;
+  struct GPIOData gpios_;
 
   /// \brief vector with the imus.
   std::vector<std::shared_ptr<ImuData>> imus_;
@@ -605,49 +603,73 @@ void GazeboSimSystem::registerSensors(
 void GazeboSimSystem::registerGPIOs(
   const hardware_interface::HardwareInfo & hardware_info)
 {
-  size_t n_gpios = hardware_info.gpios.size();
-  this->dataPtr->gpios_.resize(n_gpios);
+  // Reserve once so pointers handed to State/CommandInterface remain valid.
+  size_t total_gpio_state_interfaces = 0;
+  size_t total_gpio_command_interfaces = 0;
+  for (const auto & gpio : hardware_info.gpios) {
+    total_gpio_state_interfaces += gpio.state_interfaces.size();
+    total_gpio_command_interfaces += gpio.command_interfaces.size();
+  }
+  this->dataPtr->gpios_.state_interfaces.resize(total_gpio_state_interfaces);
+  this->dataPtr->gpios_.command_interfaces.resize(total_gpio_command_interfaces);
 
-  for (unsigned int j = 0; j < n_gpios; j++) {
+  int state_index = 0;
+  int command_index = 0;
+  for (unsigned int j = 0; j < hardware_info.gpios.size(); j++) {
     hardware_interface::ComponentInfo component = hardware_info.gpios[j];
 
-    this->dataPtr->gpios_[j].name = component.name;
-    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "Loading GPIO: " << this->dataPtr->gpios_[j].name);
+    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "Loading GPIO: " << component.name);
 
     RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\tState:");
     for (const auto & state_interface : component.state_interfaces) {
-      // get interface name
-      auto state_interface_name = state_interface.name;
-      RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t " << state_interface.name);
-      this->dataPtr->gpios_[j].state_interface_names.push_back(state_interface_name);
-      // get initial value
+      // Combine component name and state interface name to create full name
+      auto name = component.name + "/" + state_interface.name;
+      RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t " << name);
+      // Set initial value
       double initial_value = 0.0;
       if(!state_interface.initial_value.empty()){
         initial_value = hardware_interface::stod(state_interface.initial_value);
         RCLCPP_INFO(this->nh_->get_logger(), "\t\t\t found initial value: %f", initial_value);
       }      
-      this->dataPtr->gpios_[j].states.push_back(initial_value);  
+
+      this->dataPtr->gpios_.state_interfaces[state_index] = {name,initial_value};
+
+      // Register the state interface
+      this->dataPtr->state_interfaces_.emplace_back(
+        component.name,
+        state_interface.name,
+        &this->dataPtr->gpios_.state_interfaces[state_index].second); 
+
+      // Add to the map for easy lookup during read/write
+      state_index_map_[this->dataPtr->gpios_.state_interfaces[state_index].first] = state_index;
+      state_index++;
     }
 
-    // register state interfaces
-    auto n_state_interfaces = this->dataPtr->gpios_[j].state_interface_names.size();
-    for (size_t i = 0; i < n_state_interfaces; i++)
-      this->dataPtr->state_interfaces_.emplace_back(
-        this->dataPtr->gpios_[j].name,
-        this->dataPtr->gpios_[j].state_interface_names[i],
-        &this->dataPtr->gpios_[j].states[i]); 
 
-    // register command interfaces
-    this->dataPtr->gpios_[j].mock_commands.resize(n_state_interfaces);
-    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\tCommand: (mocked)");
-    for (size_t i = 0; i < n_state_interfaces; i++){
-      // mock gpio - register command interfaces under the same names as state
-      RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t " << this->dataPtr->gpios_[j].state_interface_names[i]);
+    RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\tCommand:");
+    for (const auto & command_interface : component.command_interfaces) {
+      // Combine component name and command interface name to create full name
+      auto name = component.name + "/" + command_interface.name;
+      RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t " << name);
+      // Set initial value
+      double initial_value = 0.0;
+      if(!command_interface.initial_value.empty()){
+        initial_value = hardware_interface::stod(command_interface.initial_value);
+        RCLCPP_INFO(this->nh_->get_logger(), "\t\t\t found initial value: %f", initial_value);
+      }      
+
+      this->dataPtr->gpios_.command_interfaces[command_index] = {name,initial_value};
+
+      // Register the command interface
       this->dataPtr->command_interfaces_.emplace_back(
-        this->dataPtr->gpios_[j].name,
-        this->dataPtr->gpios_[j].state_interface_names[i],
-        &this->dataPtr->gpios_[j].mock_commands[i]); 
-    }    
+        component.name,
+        command_interface.name,
+        &this->dataPtr->gpios_.command_interfaces[command_index].second); 
+
+      // Add to the map for easy lookup during read/write
+      command_index_map_[this->dataPtr->gpios_.command_interfaces[command_index].first] = command_index;
+      command_index++;
+    }
   }
 }
 
@@ -787,11 +809,17 @@ hardware_interface::return_type GazeboSimSystem::read(
     }
   }
 
-  // mirror gpio commands to states
-  for (unsigned int i = 0; i < this->dataPtr->gpios_.size(); ++i) {
-    this->dataPtr->gpios_[i].states = this->dataPtr->gpios_[i].mock_commands;
+  // For any command write to the state interface of the same name
+  for (const auto &command : this->dataPtr->gpios_.command_interfaces) {
+    auto it = state_index_map_.find(command.first);
+    if (it != state_index_map_.end()) {
+      this->dataPtr->gpios_.state_interfaces[it->second].second = command.second;
+    } else {
+      RCLCPP_WARN_STREAM(
+        this->nh_->get_logger(),
+        "No matching state interface found for command interface: " << command.first);
+    }
   }
-
   return hardware_interface::return_type::OK;
 }
 
