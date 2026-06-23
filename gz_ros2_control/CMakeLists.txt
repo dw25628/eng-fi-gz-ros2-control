@@ -24,6 +24,7 @@ find_package(gz-sim REQUIRED)
 
 find_package(gz_plugin_vendor REQUIRED)
 find_package(gz-plugin REQUIRED)
+find_package(balehawk_mock_embedded_interface REQUIRED)
 
 include_directories(include)
 
@@ -45,6 +46,7 @@ ament_target_dependencies(${PROJECT_NAME}-system
   rclcpp
   yaml_cpp_vendor
   rclcpp_lifecycle
+  balehawk_mock_embedded_interface
 )
 target_include_directories(${PROJECT_NAME}-system PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
@@ -60,6 +62,7 @@ ament_target_dependencies(gz_hardware_plugins
   rclcpp_lifecycle
   hardware_interface
   rclcpp
+  balehawk_mock_embedded_interface
 )
 target_link_libraries(gz_hardware_plugins
   gz-sim::gz-sim
@@ -102,6 +105,7 @@ ament_target_dependencies(ign_ros2_control-system
   rclcpp
   yaml_cpp_vendor
   rclcpp_lifecycle
+  balehawk_mock_embedded_interface
 )
 
 # Testing and linting
@@ -123,6 +127,7 @@ ament_export_targets(
 ament_export_dependencies(
     controller_manager
     hardware_interface
+    balehawk_mock_embedded_interface
 )
 install(TARGETS ign_ros2_control-system
   DESTINATION lib

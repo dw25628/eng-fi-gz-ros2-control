@@ -222,6 +222,8 @@ bool GazeboSimSystem::initSim(
   this->dataPtr = std::make_unique<GazeboSimSystemPrivate>();
   this->dataPtr->last_update_sim_time_ros_ = rclcpp::Time();
 
+  this->balehawk_mock_interface_ = std::make_shared<BalehawkMockInterface>();
+
   this->nh_ = model_nh;
   this->dataPtr->ecm = &_ecm;
 
@@ -397,6 +399,8 @@ bool GazeboSimSystem::initSim(
           &this->dataPtr->joints_[j].joint_position);
         initial_position = get_initial_value(joint_info.state_interfaces[i]);
         this->dataPtr->joints_[j].joint_position = initial_position;
+        this->balehawk_mock_interface_->add_joint_state_interface(joint_name + "/" + joint_info.state_interfaces[i].name, 
+          &this->dataPtr->joints_[j].joint_position);
       }
       if (joint_info.state_interfaces[i].name == "velocity") {
         RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t velocity");
@@ -406,6 +410,8 @@ bool GazeboSimSystem::initSim(
           &this->dataPtr->joints_[j].joint_velocity);
         initial_velocity = get_initial_value(joint_info.state_interfaces[i]);
         this->dataPtr->joints_[j].joint_velocity = initial_velocity;
+        this->balehawk_mock_interface_->add_joint_state_interface(joint_name + "/" + joint_info.state_interfaces[i].name, 
+          &this->dataPtr->joints_[j].joint_velocity);
       }
       if (joint_info.state_interfaces[i].name == "effort") {
         RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t effort");
@@ -415,6 +421,8 @@ bool GazeboSimSystem::initSim(
           &this->dataPtr->joints_[j].joint_effort);
         initial_effort = get_initial_value(joint_info.state_interfaces[i]);
         this->dataPtr->joints_[j].joint_effort = initial_effort;
+        this->balehawk_mock_interface_->add_joint_state_interface(joint_name + "/" + joint_info.state_interfaces[i].name, 
+          &this->dataPtr->joints_[j].joint_effort);
       }
     }
 
@@ -613,8 +621,8 @@ void GazeboSimSystem::registerGPIOs(
   this->dataPtr->gpios_.state_interfaces.resize(total_gpio_state_interfaces);
   this->dataPtr->gpios_.command_interfaces.resize(total_gpio_command_interfaces);
 
-  int state_index = 0;
   int command_index = 0;
+  int state_index = 0;
   for (unsigned int j = 0; j < hardware_info.gpios.size(); j++) {
     hardware_interface::ComponentInfo component = hardware_info.gpios[j];
 
@@ -640,8 +648,10 @@ void GazeboSimSystem::registerGPIOs(
         state_interface.name,
         &this->dataPtr->gpios_.state_interfaces[state_index].second); 
 
-      // Add to the map for easy lookup during read/write
-      state_index_map_[this->dataPtr->gpios_.state_interfaces[state_index].first] = state_index;
+      this->balehawk_mock_interface_->add_state_interface(
+        name,
+        &this->dataPtr->gpios_.state_interfaces[state_index].second);
+
       state_index++;
     }
 
@@ -666,8 +676,10 @@ void GazeboSimSystem::registerGPIOs(
         command_interface.name,
         &this->dataPtr->gpios_.command_interfaces[command_index].second); 
 
-      // Add to the map for easy lookup during read/write
-      command_index_map_[this->dataPtr->gpios_.command_interfaces[command_index].first] = command_index;
+      this->balehawk_mock_interface_->add_command_interface(
+        name,
+        &this->dataPtr->gpios_.command_interfaces[command_index].second);
+
       command_index++;
     }
   }
@@ -731,8 +743,8 @@ CallbackReturn GazeboSimSystem::on_deactivate(const rclcpp_lifecycle::State & pr
 }
 
 hardware_interface::return_type GazeboSimSystem::read(
-  const rclcpp::Time & /*time*/,
-  const rclcpp::Duration & /*period*/)
+  const rclcpp::Time & time,
+  const rclcpp::Duration & period)
 {
   for (unsigned int i = 0; i < this->dataPtr->joints_.size(); ++i) {
     if (this->dataPtr->joints_[i].sim_joint == sim::kNullEntity) {
@@ -809,17 +821,7 @@ hardware_interface::return_type GazeboSimSystem::read(
     }
   }
 
-  // For any command write to the state interface of the same name
-  for (const auto &command : this->dataPtr->gpios_.command_interfaces) {
-    auto it = state_index_map_.find(command.first);
-    if (it != state_index_map_.end()) {
-      this->dataPtr->gpios_.state_interfaces[it->second].second = command.second;
-    } else {
-      RCLCPP_WARN_STREAM(
-        this->nh_->get_logger(),
-        "No matching state interface found for command interface: " << command.first);
-    }
-  }
+  this->balehawk_mock_interface_->update(time, period);
   return hardware_interface::return_type::OK;
 }
 

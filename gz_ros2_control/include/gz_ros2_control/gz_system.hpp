@@ -25,6 +25,8 @@
 #include "rclcpp_lifecycle/state.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 
+#include "balehawk_mock_embedded_interface/balehawk_mock_interface.hpp"
+
 namespace gz_ros2_control
 {
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -95,10 +97,8 @@ private:
   /// \brief Private data class
   std::unique_ptr<GazeboSimSystemPrivate> dataPtr;
 
-  /// \brief Map from state name to hardware_interface component info
-  std::unordered_map<std::string, size_t> state_index_map_;
-  /// \brief Map from command name to hardware_interface component info
-  std::unordered_map<std::string, size_t> command_index_map_;
+  /// \brief Ptr to the balehawk mock interface
+  std::shared_ptr<BalehawkMockInterface> balehawk_mock_interface_;
 };
 
 }  // namespace gz_ros2_control
