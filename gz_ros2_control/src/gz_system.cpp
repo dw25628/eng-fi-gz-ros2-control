@@ -439,6 +439,8 @@ bool GazeboSimSystem::initSim(
         if (!std::isnan(initial_position)) {
           this->dataPtr->joints_[j].joint_position_cmd = initial_position;
         }
+        this->balehawk_mock_interface_->add_joint_command_interface(joint_name + "/" + joint_info.command_interfaces[i].name, 
+          &this->dataPtr->joints_[j].joint_position_cmd);
       } else if (joint_info.command_interfaces[i].name == "velocity") {
         RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t velocity");
         this->dataPtr->command_interfaces_.emplace_back(
@@ -448,6 +450,8 @@ bool GazeboSimSystem::initSim(
         if (!std::isnan(initial_velocity)) {
           this->dataPtr->joints_[j].joint_velocity_cmd = initial_velocity;
         }
+        this->balehawk_mock_interface_->add_joint_command_interface(joint_name + "/" + joint_info.command_interfaces[i].name, 
+          &this->dataPtr->joints_[j].joint_velocity_cmd);
       } else if (joint_info.command_interfaces[i].name == "effort") {
         RCLCPP_INFO_STREAM(this->nh_->get_logger(), "\t\t effort");
         this->dataPtr->command_interfaces_.emplace_back(
@@ -457,6 +461,8 @@ bool GazeboSimSystem::initSim(
         if (!std::isnan(initial_effort)) {
           this->dataPtr->joints_[j].joint_effort_cmd = initial_effort;
         }
+        this->balehawk_mock_interface_->add_joint_command_interface(joint_name + "/" + joint_info.command_interfaces[i].name, 
+          &this->dataPtr->joints_[j].joint_effort_cmd);
       }
       // independently of existence of command interface set initial value if defined
       if (!std::isnan(initial_position)) {
